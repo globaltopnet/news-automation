@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Summary</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh;
+            margin: 0;
+            padding-top: 10%;
+        }
+        .center {
+            text-align: center;
+            max-width: 800px;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        p {
+            margin: 1em 0; /* Adjust the margin to control spacing between paragraphs */
+        }
+        ul {
+            margin: 1em 0;
+            padding-left: 20px; /* Adjust padding for nested lists */
+        }
+        li {
+            margin: 0.5em 0; /* Adjust margin for list items */
+        }
+        .loading-bar {
+            display: none;
+            width: 50px;
+            height: 50px;
+            border: 6px solid #ccc;
+            border-top-color: #333;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .btn-back {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .btn-back:hover {
+            background-color: #0056b3;
+        }
+    </style>
+    <script>
+        window.addEventListener('load', function () {
+            document.getElementById('loadingBar').style.display = 'none';
+        });
+    </script>
+</head>
+<body>
+    <div class="loading-bar" id="loadingBar"></div>
+    <div class="center">
+        <h1>{{ title }}</h1>
+        <h2>요약:</h2>
+        <div>{{ summary|safe }}</div>
+        <iframe src="{{ pdf_path }}" width="100%" height="600px"></iframe>
+        <br>
+        <button class="btn-back" onclick="window.location.href='/'">다시 검색하기</button>
+    </div>
+</body>
+</html>

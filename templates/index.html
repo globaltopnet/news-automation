@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>문서</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh;
+            margin: 0;
+            padding-top: 10%;
+        }
+        .center {
+            text-align: center;
+        }
+        .keywords {
+            margin-top: 20px;
+        }
+        .keyword-list {
+            margin-top: 10px;
+            list-style-type: none;
+            padding: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .keyword-item {
+            display: flex;
+            align-items: center;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 5px 10px;
+        }
+        .keyword-item span {
+            margin-right: 10px;
+        }
+        .keyword-item button {
+            color: black;
+            border: none;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            cursor: pointer;
+        }
+        .article-list {
+            margin-top: 20px;
+            list-style-type: none;
+            padding: 0;
+        }
+        .article-item {
+            margin-bottom: 10px;
+        }
+        .article-item a {
+            text-decoration: none;
+            color: blue;
+        }
+        .loading-bar {
+            display: none;
+            width: 50px;
+            height: 50px;
+            border: 6px solid #ccc;
+            border-top-color: #333;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-bar" id="loadingBar"></div>
+    <div class="center">
+        <label for="regionSelect">지역 선택:</label>
+        <select id="regionSelect" name="regionSelect">
+            <option value="seoul">서울</option>
+            <option value="busan">부산</option>
+        </select>
+        <br><br>
+        <div class="keywords">
+            <label for="keywordInput">키워드 입력:</label>
+            <input type="text" id="keywordInput" name="keywordInput">
+            <button onclick="saveKeyword()">저장</button>
+            <ul id="keywordList" class="keyword-list"></ul>
+            <button id="fetchArticlesButton" onclick="fetchArticles()">기사들 가져오기</button>
+        </div>
+        <p id="status"></p>
+        <ul id="articleList" class="article-list"></ul>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+    <script>
+        const keywords = [];
+
+        document.getElementById('keywordInput').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                saveKeyword();
+            }
+        });
+
+        function saveKeyword() {
+            const keywordInput = document.getElementById('keywordInput');
+            const keyword = keywordInput.value.trim();
+            if (keyword && !keywords.includes(keyword)) {
+                keywords.push(keyword);
+                updateKeywordList();
+                keywordInput.value = '';
+            }
+        }
+
+        function updateKeywordList() {
+            const keywordList = document.getElementById('keywordList');
+            keywordList.innerHTML = '';
+            keywords.forEach((keyword, index) => {
+                const li = document.createElement('li');
+                li.className = 'keyword-item';
+                li.innerHTML = `<span>${keyword}</span><button onclick="removeKeyword(${index})">×</button>`;
+                keywordList.appendChild(li);
+            });
+        }
+
+        function removeKeyword(index) {
+            keywords.splice(index, 1);
+            updateKeywordList();
+        }
+
+        async function fetchArticles() {
+            const status = document.getElementById('status');
+            const articleList = document.getElementById('articleList');
+            articleList.innerHTML = '';
+            status.textContent = 'Fetching articles...';
+
+            try {
+                const proxyUrl = 'https://api.allorigins.win/get?url=';
+                const targetUrl = 'https://seoulboard.seoul.go.kr/rss/RSSGenerator?bbsNo=158';
+                const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+                const data = await response.json();
+                const text = data.contents;
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, "application/xml");
+
+                const items = xmlDoc.getElementsByTagName('item');
+                const filteredArticles = [];
+
+                for (let item of items) {
+                    const title = item.getElementsByTagName('title')[0].textContent;
+                    const link = item.getElementsByTagName('link')[0].textContent;
+                    if (keywords.length === 0 || keywords.some(keyword => title.toLowerCase().includes(keyword.toLowerCase()))) {
+                        const linkParts = link.split('/');
+                        const lastPart = linkParts[linkParts.length - 1];
+                        const newLink = `https://seoulboard.seoul.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=${lastPart}&fileTy=ATTACH&fileNo=2&bbsNo=158`;
+                        filteredArticles.push({ title, newLink });
+                    }
+                }
+
+                if (filteredArticles.length > 0) {
+                    filteredArticles.forEach(article => {
+                        const li = document.createElement('li');
+                        li.className = 'article-item';
+                        li.innerHTML = `<a href="javascript:void(0);" onclick="handleArticleClick('${article.newLink}', '${article.title}')">${article.title}</a>`;
+                        articleList.appendChild(li);
+                    });
+                } else {
+                    status.textContent = 'No articles found for the given keywords.';
+                }
+
+                status.textContent = '';
+            } catch (error) {
+                status.textContent = 'Failed to fetch articles. Please try again later.';
+                console.error('Error fetching articles:', error);
+            }
+        }
+
+        function handleArticleClick(link, title) {
+            const loadingBar = document.getElementById('loadingBar');
+            loadingBar.style.display = 'block';
+
+            fetch(`/download?url=${encodeURIComponent(link)}&title=${encodeURIComponent(title)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = `/summarize?filename=${data.filename}&title=${encodeURIComponent(title)}`;
+                    } else {
+                        loadingBar.style.display = 'none';
+                        alert('Failed to download the article.');
+                    }
+                })
+                .catch(error => {
+                    loadingBar.style.display = 'none';
+                    console.error('Error downloading the article:', error);
+                    alert('Failed to download the article.');
+                });
+        }
+    </script>
+</body>
+</html>
