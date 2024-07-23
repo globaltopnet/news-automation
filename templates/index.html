@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>문서</title>
+    <title>글로벌탑넷 - 기사 자동화</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         body {
@@ -77,6 +78,11 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .section-header {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -84,6 +90,7 @@
     <div class="center">
         <label for="regionSelect">지역 선택:</label>
         <select id="regionSelect" name="regionSelect">
+            <option value="all" selected>전체</option>
             <option value="seoul">서울</option>
             <option value="busan">부산</option>
         </select>
@@ -138,17 +145,54 @@
         }
 
         async function fetchArticles() {
+            const region = document.getElementById('regionSelect').value;
             const status = document.getElementById('status');
             const articleList = document.getElementById('articleList');
             articleList.innerHTML = '';
             status.textContent = 'Fetching articles...';
 
+            let seoulArticles = [];
+            let busanArticles = [];
+
+            if (region === 'seoul' || region === 'all') {
+                seoulArticles = await getArticles('seoul');
+            }
+
+            if (region === 'busan' || region === 'all') {
+                busanArticles = await getArticles('busan');
+            }
+
+            if (region === 'all') {
+                displayArticles('서울특별시 소식 보도자료:', seoulArticles);
+                displayArticles('부산광역시 소식 보도자료:', busanArticles);
+            } else {
+                const articles = region === 'seoul' ? seoulArticles : busanArticles;
+                displayArticles('', articles);
+            }
+
+            status.textContent = '';
+        }
+
+        async function getArticles(region) {
+            const rssUrl = region === 'seoul' 
+                ? 'https://seoulboard.seoul.go.kr/rss/RSSGenerator?bbsNo=158' 
+                : 'https://www.busan.go.kr/nbtnewsBU.rss';
+            const pdfBaseUrl = region === 'seoul' 
+                ? 'https://seoulboard.seoul.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=' 
+                : 'https://www.busan.go.kr/comm/getFile?srvcId=BBSTY3&upperNo=';
+
             try {
                 const proxyUrl = 'https://api.allorigins.win/get?url=';
-                const targetUrl = 'https://seoulboard.seoul.go.kr/rss/RSSGenerator?bbsNo=158';
-                const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+                const response = await fetch(proxyUrl + encodeURIComponent(rssUrl));
                 const data = await response.json();
-                const text = data.contents;
+                let text;
+
+                if (region === 'busan') {
+                    text = decodeBase64(data.contents.split(',')[1]); // Base64 decoding
+                } else {
+                    text = data.contents;
+                }
+
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(text, "application/xml");
 
@@ -158,41 +202,65 @@
                 for (let item of items) {
                     const title = item.getElementsByTagName('title')[0].textContent;
                     const link = item.getElementsByTagName('link')[0].textContent;
+                    const upperNo = link.split('/').pop(); // Extract upperNo from the link
+
+                    let newLink;
+                    if (region === 'seoul') {
+                        newLink = `${pdfBaseUrl}${upperNo}&fileTy=ATTACH&fileNo=2&bbsNo=158`;
+                    } else {
+                        newLink = `${pdfBaseUrl}${upperNo}&fileTy=ATTACH&fileNo=1`;
+                    }
+
                     if (keywords.length === 0 || keywords.some(keyword => title.toLowerCase().includes(keyword.toLowerCase()))) {
-                        const linkParts = link.split('/');
-                        const lastPart = linkParts[linkParts.length - 1];
-                        const newLink = `https://seoulboard.seoul.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=${lastPart}&fileTy=ATTACH&fileNo=2&bbsNo=158`;
                         filteredArticles.push({ title, newLink });
                     }
                 }
 
-                if (filteredArticles.length > 0) {
-                    filteredArticles.forEach(article => {
-                        const li = document.createElement('li');
-                        li.className = 'article-item';
-                        li.innerHTML = `<a href="javascript:void(0);" onclick="handleArticleClick('${article.newLink}', '${article.title}')">${article.title}</a>`;
-                        articleList.appendChild(li);
-                    });
-                } else {
-                    status.textContent = 'No articles found for the given keywords.';
-                }
-
-                status.textContent = '';
+                return filteredArticles;
             } catch (error) {
-                status.textContent = 'Failed to fetch articles. Please try again later.';
-                console.error('Error fetching articles:', error);
+                console.error(`Error fetching articles from ${region}:`, error);
+                return [];
             }
         }
 
-        function handleArticleClick(link, title) {
+        function displayArticles(header, articles) {
+            const articleList = document.getElementById('articleList');
+            if (header) {
+                const headerElement = document.createElement('li');
+                headerElement.textContent = header;
+                headerElement.className = 'section-header';
+                articleList.appendChild(headerElement);
+            }
+            if (articles.length > 0) {
+                articles.forEach(article => {
+                    const li = document.createElement('li');
+                    li.className = 'article-item';
+                    li.innerHTML = `<a href="javascript:void(0);" onclick="handleArticleClick('${article.newLink}', '${article.title}', '${article.region}')">${article.title}</a>`;
+                    articleList.appendChild(li);
+                });
+            } else {
+                const noArticlesElement = document.createElement('li');
+                noArticlesElement.textContent = '키워드와 맞는 기사가 현재 없습니다';
+                noArticlesElement.className = 'article-item';
+                articleList.appendChild(noArticlesElement);
+            }
+        }
+
+        function decodeBase64(str) {
+            return decodeURIComponent(atob(str).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        }
+
+        function handleArticleClick(link, title, region) {
             const loadingBar = document.getElementById('loadingBar');
             loadingBar.style.display = 'block';
 
-            fetch(`/download?url=${encodeURIComponent(link)}&title=${encodeURIComponent(title)}`)
+            fetch(`/download?url=${encodeURIComponent(link)}&title=${encodeURIComponent(title)}&region=${encodeURIComponent(region)}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        window.location.href = `/summarize?filename=${data.filename}&title=${encodeURIComponent(title)}`;
+                        window.location.href = `/summarize?filename=${encodeURIComponent(data.filename)}&title=${encodeURIComponent(title)}`;
                     } else {
                         loadingBar.style.display = 'none';
                         alert('Failed to download the article.');

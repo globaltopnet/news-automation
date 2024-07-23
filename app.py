@@ -27,8 +27,12 @@ def index():
 def download_article():
     url = request.args.get('url')
     title = request.args.get('title')
+    region = request.args.get('region')
+    region_folder = os.path.join("downloads", region)
+    os.makedirs(region_folder, exist_ok=True)
+    
     filename = title.replace(" ", "_") + ".pdf"
-    filepath = os.path.join("downloads", filename)
+    filepath = os.path.join(region_folder, filename)
 
     # Check if the file already exists
     if not os.path.exists(filepath):
@@ -36,7 +40,7 @@ def download_article():
         with open(filepath, 'wb') as f:
             f.write(response.content)
 
-    return jsonify({'success': True, 'filename': filename})
+    return jsonify({'success': True, 'filename': os.path.join(region, filename)})
 
 @app.route('/summarize')
 def summarize_article():
@@ -70,7 +74,7 @@ def summarize_article():
 
     return render_template('summary.html', summary=summary_html, title=title, pdf_path=f"/downloads/{filename}")
 
-@app.route('/downloads/<filename>')
+@app.route('/downloads/<path:filename>')
 def download_file(filename):
     return send_from_directory('downloads', filename)
 
