@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    <title>{{ title }} - 요약 페이지</title>
+    <title>{{ title }} - 요약</title>
     <style>
         body {
             display: flex;
@@ -22,14 +21,14 @@
             box-sizing: border-box;
         }
         p {
-            margin: 1em 0; /* Adjust the margin to control spacing between paragraphs */
+            margin: 1em 0;
         }
         ul {
             margin: 1em 0;
-            padding-left: 20px; /* Adjust padding for nested lists */
+            padding-left: 20px;
         }
         li {
-            margin: 0.5em 0; /* Adjust margin for list items */
+            margin: 0.5em 0;
         }
         .loading-bar {
             display: none;
@@ -74,9 +73,13 @@
         <h1>{{ title }}</h1>
         <h2>요약:</h2>
         <div>{{ summary|safe }}</div>
-        <iframe src="{{ pdf_path }}" width="100%" height="600px"></iframe>
+        {% if file_type == 'pdf' %}
+            <iframe src="{{ file_path }}" width="100%" height="600px"></iframe>
+        {% elif file_type == 'hwp' %}
+            <p><a href="{{ file_path }}" download>보도자료 HWP 파일 다운로드</a></p>
+        {% endif %}
         <br>
-        <button class="btn-back" onclick="window.location.href='/'">다시 검색하기</button>
+        <button class="btn-back" onclick="window.history.back()">다시 검색하기</button>
     </div>
 </body>
 </html>

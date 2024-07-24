@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>글로벌탑넷 - 기사 자동화</title>
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <title>베이버스 - 기사 자동화</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         body {
@@ -93,6 +92,8 @@
             <option value="all" selected>전체</option>
             <option value="seoul">서울</option>
             <option value="busan">부산</option>
+            <option value="incheon">인천</option>
+            <option value="gwangju">광주</option>
         </select>
         <br><br>
         <div class="keywords">
@@ -125,6 +126,7 @@
                 keywords.push(keyword);
                 updateKeywordList();
                 keywordInput.value = '';
+                saveState();
             }
         }
 
@@ -142,6 +144,7 @@
         function removeKeyword(index) {
             keywords.splice(index, 1);
             updateKeywordList();
+            saveState();
         }
 
         async function fetchArticles() {
@@ -151,8 +154,13 @@
             articleList.innerHTML = '';
             status.textContent = 'Fetching articles...';
 
+            const loadingBar = document.getElementById('loadingBar');
+            loadingBar.style.display = 'block';
+
             let seoulArticles = [];
             let busanArticles = [];
+            let incheonArticles = [];
+            let gwangjuArticles = [];
 
             if (region === 'seoul' || region === 'all') {
                 seoulArticles = await getArticles('seoul');
@@ -162,15 +170,30 @@
                 busanArticles = await getArticles('busan');
             }
 
+            if (region === 'incheon' || region === 'all') {
+                incheonArticles = await getIncheonArticles();
+            }
+
+            if (region === 'gwangju' || region === 'all') {
+                gwangjuArticles = await getGwangjuArticles();
+            }
+
             if (region === 'all') {
-                displayArticles('서울특별시 소식 보도자료:', seoulArticles);
-                displayArticles('부산광역시 소식 보도자료:', busanArticles);
+                displayArticles('서울특별시 소식 보도자료:', seoulArticles, 'seoul');
+                displayArticles('부산광역시 소식 보도자료:', busanArticles, 'busan');
+                displayArticles('인천광역시 소식 보도자료:', incheonArticles, 'incheon');
+                displayArticles('광주시 소식 보도자료:', gwangjuArticles, 'gwangju');
             } else {
-                const articles = region === 'seoul' ? seoulArticles : busanArticles;
-                displayArticles('', articles);
+                const articles = region === 'seoul' ? seoulArticles :
+                                 region === 'busan' ? busanArticles :
+                                 region === 'incheon' ? incheonArticles :
+                                 gwangjuArticles;
+                displayArticles('', articles, region);
             }
 
             status.textContent = '';
+            loadingBar.style.display = 'none';
+            saveState();
         }
 
         async function getArticles(region) {
@@ -212,7 +235,7 @@
                     }
 
                     if (keywords.length === 0 || keywords.some(keyword => title.toLowerCase().includes(keyword.toLowerCase()))) {
-                        filteredArticles.push({ title, newLink });
+                        filteredArticles.push({ title, newLink, region });
                     }
                 }
 
@@ -223,7 +246,58 @@
             }
         }
 
-        function displayArticles(header, articles) {
+        function decodeBase64(str) {
+            return decodeURIComponent(atob(str).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        }
+
+        async function getIncheonArticles() {
+            try {
+                const response = await fetch('/fetch_incheon_titles');
+                const data = await response.json();
+                return data.filter(article => {
+                    return keywords.length === 0 || keywords.some(keyword => article.title.toLowerCase().includes(keyword.toLowerCase()));
+                });
+            } catch (error) {
+                console.error('Error fetching articles from Incheon:', error);
+                return [];
+            }
+        }
+
+        async function getGwangjuArticles() {
+            try {
+                const response = await fetch('/fetch_gwangju_titles');
+                const data = await response.json();
+                return data.filter(article => {
+                    return keywords.length === 0 || keywords.some(keyword => article.title.toLowerCase().includes(keyword.toLowerCase()));
+                });
+            } catch (error) {
+                console.error('Error fetching articles from Gwangju:', error);
+                return [];
+            }
+        }
+
+        async function fetchAndRedirectToSummary(link, title, region) {
+            try {
+                const response = await fetch(`/fetch_page?url=${encodeURIComponent(link)}`);
+                const data = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(data, 'text/html');
+                const downloadLinkElement = doc.querySelector('.file-preview-down-group a[href*="dmsFileDownload"]');
+                const downloadLink = downloadLinkElement ? `https://www.incheon.go.kr${downloadLinkElement.getAttribute('href')}` : null;
+
+                if (downloadLink) {
+                    window.location.href = `/download_and_redirect?url=${encodeURIComponent(downloadLink)}&title=${encodeURIComponent(title)}&region=${encodeURIComponent(region)}`;
+                } else {
+                    console.error('No download link found');
+                }
+            } catch (error) {
+                console.error('Error fetching the page:', error);
+            }
+        }
+
+        function displayArticles(header, articles, region) {
             const articleList = document.getElementById('articleList');
             if (header) {
                 const headerElement = document.createElement('li');
@@ -235,7 +309,12 @@
                 articles.forEach(article => {
                     const li = document.createElement('li');
                     li.className = 'article-item';
-                    li.innerHTML = `<a href="javascript:void(0);" onclick="handleArticleClick('${article.newLink}', '${article.title}', '${article.region}')">${article.title}</a>`;
+                    const onclick = region === 'incheon' ? 
+                        `fetchAndRedirectToSummary('${article.link}', '${article.title}', '${region}')` :
+                        region === 'gwangju' ?
+                        `downloadAndSummarizeHWP('${article.seq}', '${article.title}')` :
+                        `handleArticleClick('${article.newLink || article.link}', '${article.title}', '${article.region || region}')`;
+                    li.innerHTML = `<a href="javascript:void(0);" onclick="${onclick}">${article.title}</a>`;
                     articleList.appendChild(li);
                 });
             } else {
@@ -246,32 +325,44 @@
             }
         }
 
-        function decodeBase64(str) {
-            return decodeURIComponent(atob(str).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
+        function downloadAndSummarizeHWP(seq, title) {
+            const downloadLink = `https://www.gwangju.go.kr/fileDownload.do?fileSe=BB&fileKey=BD_0000000027%7C${seq}&fileSn=1&boardId=BD_0000000027&seq=${seq}`;
+            console.log(`Download link for ${title}: ${downloadLink}`);
+            console.log(`Seq for ${title}: ${seq}`);
+            const loadingBar = document.getElementById('loadingBar');
+            loadingBar.style.display = 'block';
+            window.location.href = `/download_and_summarize_hwp?url=${encodeURIComponent(downloadLink)}&title=${encodeURIComponent(title)}&seq=${encodeURIComponent(seq)}`;
         }
 
         function handleArticleClick(link, title, region) {
             const loadingBar = document.getElementById('loadingBar');
             loadingBar.style.display = 'block';
-
-            fetch(`/download?url=${encodeURIComponent(link)}&title=${encodeURIComponent(title)}&region=${encodeURIComponent(region)}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        window.location.href = `/summarize?filename=${encodeURIComponent(data.filename)}&title=${encodeURIComponent(title)}`;
-                    } else {
-                        loadingBar.style.display = 'none';
-                        alert('Failed to download the article.');
-                    }
-                })
-                .catch(error => {
-                    loadingBar.style.display = 'none';
-                    console.error('Error downloading the article:', error);
-                    alert('Failed to download the article.');
-                });
+            window.location.href = `/download_and_redirect?url=${encodeURIComponent(link)}&title=${encodeURIComponent(title)}&region=${encodeURIComponent(region)}`;
         }
+
+        function saveState() {
+            const region = document.getElementById('regionSelect').value;
+            const state = {
+                region: region,
+                keywords: keywords
+            };
+            localStorage.setItem('searchState', JSON.stringify(state));
+        }
+
+        function loadState() {
+            const state = JSON.parse(localStorage.getItem('searchState'));
+            if (state) {
+                document.getElementById('regionSelect').value = state.region;
+                state.keywords.forEach(keyword => {
+                    keywords.push(keyword);
+                });
+                updateKeywordList();
+            }
+        }
+
+        window.onload = function() {
+            loadState();
+        };
     </script>
 </body>
 </html>
