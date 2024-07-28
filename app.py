@@ -125,6 +125,32 @@ def fetch_gwangju_titles():
     
     return jsonify(articles)
 
+@app.route('/fetch_ulsan_titles')
+def fetch_ulsan_titles():
+    url = 'https://www.ulsan.go.kr/u/rep/bbs/list.do'
+    params = {
+        'bbsId': 'BBS_0000000000000027',
+        'mId': '001004003001000000'
+    }
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+
+    response = requests.get(url, params=params, headers=headers)
+    response.raise_for_status()
+    
+    parser = 'html.parser'
+    soup = BeautifulSoup(response.text, parser)
+    
+    articles = []
+    for item in soup.select('tbody tr'):
+        title = item.select_one('td.ta_l a').text.strip()
+        link = 'https://www.ulsan.go.kr' + item.select_one('td.ta_l a')['href']
+        articles.append({'title': title, 'link': link})
+    
+    return jsonify(articles)
+
 @app.route('/fetch_page', methods=['GET'])
 def fetch_page():
     url = request.args.get('url')

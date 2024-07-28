@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>베이버스 - 기사 자동화</title>
+    <title>글로벌탑넷 - 기사 자동화</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         body {
@@ -16,6 +17,10 @@
         }
         .center {
             text-align: center;
+            max-width: 800px;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
         }
         .keywords {
             margin-top: 20px;
@@ -52,6 +57,9 @@
             list-style-type: none;
             padding: 0;
         }
+        .article-list, .article-list li {
+            list-style-type: none;
+        }
         .article-item {
             margin-bottom: 10px;
         }
@@ -82,6 +90,11 @@
             margin-bottom: 10px;
             font-weight: bold;
         }
+        .toggle-button {
+            cursor: pointer;
+            color: blue;
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
@@ -94,6 +107,7 @@
             <option value="busan">부산</option>
             <option value="incheon">인천</option>
             <option value="gwangju">광주</option>
+            <option value="ulsan">울산</option>
         </select>
         <br><br>
         <div class="keywords">
@@ -161,6 +175,7 @@
             let busanArticles = [];
             let incheonArticles = [];
             let gwangjuArticles = [];
+            let ulsanArticles = [];
 
             if (region === 'seoul' || region === 'all') {
                 seoulArticles = await getArticles('seoul');
@@ -178,16 +193,22 @@
                 gwangjuArticles = await getGwangjuArticles();
             }
 
+            if (region === 'ulsan' || region === 'all') {
+                ulsanArticles = await getUlsanArticles();
+            }
+
             if (region === 'all') {
                 displayArticles('서울특별시 소식 보도자료:', seoulArticles, 'seoul');
                 displayArticles('부산광역시 소식 보도자료:', busanArticles, 'busan');
                 displayArticles('인천광역시 소식 보도자료:', incheonArticles, 'incheon');
                 displayArticles('광주시 소식 보도자료:', gwangjuArticles, 'gwangju');
+                displayArticles('울산광역시 소식 보도자료:', ulsanArticles, 'ulsan');
             } else {
                 const articles = region === 'seoul' ? seoulArticles :
                                  region === 'busan' ? busanArticles :
                                  region === 'incheon' ? incheonArticles :
-                                 gwangjuArticles;
+                                 region === 'gwangju' ? gwangjuArticles : 
+                                 ulsanArticles;
                 displayArticles('', articles, region);
             }
 
@@ -278,6 +299,19 @@
             }
         }
 
+        async function getUlsanArticles() {
+            try {
+                const response = await fetch('/fetch_ulsan_titles');
+                const data = await response.json();
+                return data.filter(article => {
+                    return keywords.length === 0 || keywords.some(keyword => article.title.toLowerCase().includes(keyword.toLowerCase()));
+                });
+            } catch (error) {
+                console.error('Error fetching articles from Ulsan:', error);
+                return [];
+            }
+        }
+
         async function fetchAndRedirectToSummary(link, title, region) {
             try {
                 const response = await fetch(`/fetch_page?url=${encodeURIComponent(link)}`);
@@ -296,39 +330,47 @@
                 console.error('Error fetching the page:', error);
             }
         }
-
         function displayArticles(header, articles, region) {
             const articleList = document.getElementById('articleList');
             if (header) {
                 const headerElement = document.createElement('li');
-                headerElement.textContent = header;
                 headerElement.className = 'section-header';
+                headerElement.innerHTML = `${header} <span class="toggle-button" onclick="toggleSection('${region}')">+</span>`;
                 articleList.appendChild(headerElement);
+                const sectionElement = document.createElement('ul');
+                sectionElement.id = `${region}-articles`;
+                sectionElement.style.display = 'none';
+                articleList.appendChild(sectionElement);
             }
+            const sectionElement = document.getElementById(`${region}-articles`);
+            sectionElement.style.listStyleType = 'none';
             if (articles.length > 0) {
                 articles.forEach(article => {
                     const li = document.createElement('li');
                     li.className = 'article-item';
+                    li.style.listStyleType = 'none';
                     const onclick = region === 'incheon' ? 
                         `fetchAndRedirectToSummary('${article.link}', '${article.title}', '${region}')` :
                         region === 'gwangju' ?
                         `downloadAndSummarizeHWP('${article.seq}', '${article.title}')` :
+                        region === 'ulsan' ?
+                        `window.location.href='${article.link}'` :  // Open Ulsan links directly
                         `handleArticleClick('${article.newLink || article.link}', '${article.title}', '${article.region || region}')`;
                     li.innerHTML = `<a href="javascript:void(0);" onclick="${onclick}">${article.title}</a>`;
-                    articleList.appendChild(li);
+                    sectionElement.appendChild(li);
                 });
             } else {
                 const noArticlesElement = document.createElement('li');
                 noArticlesElement.textContent = '키워드와 맞는 기사가 현재 없습니다';
                 noArticlesElement.className = 'article-item';
-                articleList.appendChild(noArticlesElement);
+                noArticlesElement.style.listStyleType = 'none';
+                sectionElement.appendChild(noArticlesElement);
             }
         }
 
         function downloadAndSummarizeHWP(seq, title) {
             const downloadLink = `https://www.gwangju.go.kr/fileDownload.do?fileSe=BB&fileKey=BD_0000000027%7C${seq}&fileSn=1&boardId=BD_0000000027&seq=${seq}`;
             console.log(`Download link for ${title}: ${downloadLink}`);
-            console.log(`Seq for ${title}: ${seq}`);
             const loadingBar = document.getElementById('loadingBar');
             loadingBar.style.display = 'block';
             window.location.href = `/download_and_summarize_hwp?url=${encodeURIComponent(downloadLink)}&title=${encodeURIComponent(title)}&seq=${encodeURIComponent(seq)}`;
@@ -338,6 +380,17 @@
             const loadingBar = document.getElementById('loadingBar');
             loadingBar.style.display = 'block';
             window.location.href = `/download_and_redirect?url=${encodeURIComponent(link)}&title=${encodeURIComponent(title)}&region=${encodeURIComponent(region)}`;
+        }
+
+        function toggleSection(region) {
+            const section = document.getElementById(`${region}-articles`);
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                event.target.textContent = '-';
+            } else {
+                section.style.display = 'none';
+                event.target.textContent = '+';
+            }
         }
 
         function saveState() {

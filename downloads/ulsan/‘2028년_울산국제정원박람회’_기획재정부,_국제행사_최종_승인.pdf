@@ -1,0 +1,39 @@
+
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+	<meta name="description" content="">
+	<meta name="keywords" content="">
+	<meta name="author" content="story, 스토리 - Shin Hyunho" />
+	<title>일시적인 서비스 장애 안내</title>
+	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+	<link rel="icon" href="/favicon.ico" type="image/x-icon" />
+	<style>
+	#error {padding-top:260px; text-align:center; background:url(/error_img.gif) 50% 90px no-repeat;}
+	#error p.title {font-size:25px; color:#464646; line-height:30px; }
+	#error .message {margin:0px auto; padding:10px 0 30px; font-size:14px;}
+	#error a.btn {display:inline-block; vertical-align: middle; height:36px; padding:0 30px; margin-left:4px; font-size:13px; font-weight:bold; color:#ffffff !important; line-height:36px; text-decoration:none !important; border-radius:3px; background:#006cd9;}
+	</style>
+	<script type="text/javascript">
+	//<![CDATA[     
+		function fncGoAfterErrorPage(){
+	 		history.back(-2);
+		}
+	 //]]>
+	</script>
+</head>
+<body>
+<div id="error">
+	<p class="title">이용에 불편을 드려 죄송합니다.</p>
+	<p class="message">
+		페이지의 주소가 올바른지 다시 한번 확인해 주시길 부탁드립니다. <br />
+		계속된 오류시에 관리자에게 문의바랍니다.
+	</p>
+	<a href="javascript:fncGoAfterErrorPage();" class="btn">이전 페이지로</a>
+</div>
+</body>
+</html>
